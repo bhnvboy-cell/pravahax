@@ -37,7 +37,7 @@ function join() {
   myUsername = name;
   myId = 'user_' + Math.random().toString(36).substr(2, 9);
 
-  peer = new Peer(myId, { path: '/peerjs', host: location.hostname, port: location.port });
+  peer = new Peer(myId, { path: '/peerjs', host: location.hostname, port: 9000 });
 
   peer.on('open', () => {
     ws = new WebSocket(`ws://${location.host}`);
