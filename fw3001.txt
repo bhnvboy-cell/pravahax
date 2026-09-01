@@ -1,0 +1,16 @@
+
+Rule Name:                            PravahaX 3001
+----------------------------------------------------------------------
+Enabled:                              Yes
+Direction:                            In
+Profiles:                             Domain,Private,Public
+Grouping:                             
+LocalIP:                              Any
+RemoteIP:                             Any
+Protocol:                             TCP
+LocalPort:                            3001
+RemotePort:                           Any
+Edge traversal:                       No
+Action:                               Allow
+Ok.
+

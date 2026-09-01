@@ -1,7 +1,3 @@
-if (location.protocol === 'http:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-  location.href = 'https://' + location.hostname + ':3001' + location.pathname;
-}
-
 let ws, myId, myUsername;
 let localStream;
 let remotePeerId;
