@@ -1,57 +1,110 @@
-# PravahaX
+# PravahaX Enterprise
 
-Local network chat and video call app. No internet required — works over WiFi.
+Enterprise-grade local network chat and video call platform.
 
 ## Features
 
+### Core
 - Real-time text messaging
-- Video and audio calls (WebRTC)
-- See who's online
-- Works on any device (phone, tablet, computer)
-- No account needed — just enter your name
+- Video and audio calls (WebRTC P2P)
+- Online user presence
+- Works on phone, tablet, computer
 
-## How to Run
+### Enterprise
+- **Authentication** — JWT-based register/login
+- **Roles** — Admin and user permissions
+- **Security** — Helmet headers, rate limiting, input sanitization
+- **Logging** — Structured logging with Winston (file + console)
+- **Monitoring** — Health check endpoint, memory/uptime metrics
+- **Admin Panel** — User management, bans, broadcasts, audit logs
+- **Audit Trail** — Every action logged with IP and timestamp
+- **Graceful Shutdown** — Clean disconnect on SIGTERM/SIGINT
+- **Error Recovery** — Auto-reconnect WebSocket, crash handlers
+- **Deployment** — Docker, docker-compose, GitHub Actions CI/CD
+
+## Quick Start
 
 ```bash
 npm install
 npm start
 ```
 
-Open `http://localhost:3000` on your computer.
+Open `http://localhost:3000`
 
-For other devices on the same WiFi, use your computer's local IP (shown in terminal when server starts):
+Default admin: `admin` / `admin123`
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Register new user |
+| POST | `/api/auth/login` | Login |
+| GET | `/api/auth/me` | Get current user |
+| PUT | `/api/auth/me/password` | Change password |
+| GET | `/api/health` | Health check |
+| GET | `/api/online` | Online users |
+| GET | `/api/admin/users` | List all users (admin) |
+| GET | `/api/admin/stats` | Dashboard stats (admin) |
+| GET | `/api/admin/audit` | Audit logs (admin) |
+| PUT | `/api/admin/users/:id/role` | Change role (admin) |
+| PUT | `/api/admin/users/:id/status` | Ban/unban (admin) |
+| DELETE | `/api/admin/users/:id` | Delete user (admin) |
+| POST | `/api/admin/kick` | Kick online user (admin) |
+
+## Admin Panel
+
+Open `http://localhost:3000/admin/`
+
+- View stats dashboard
+- Manage users (ban/unban/delete)
+- Kick online users
+- Send broadcast messages
+- View audit logs
+
+## Docker
+
+```bash
+docker-compose up -d
+```
+
+## Environment Variables
+
+Copy `.env.example` to `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Key variables:
+- `JWT_SECRET` — Secret key for JWT tokens (change in production!)
+- `ADMIN_PASSWORD` — Default admin password
+- `RATE_LIMIT_MAX` — Max requests per window
+
+## Architecture
 
 ```
-http://YOUR_IP:3000
-```
-
-## Camera/Mic on Mobile
-
-Mobile browsers require HTTPS or special flags for camera/microphone access.
-
-**Option 1: Firefox (recommended)**  
-Install Firefox on your phone — it works over HTTP on local networks.
-
-**Option 2: Chrome flag**  
-Open `chrome://flags/#unsafely-treat-insecure-origin-as-secure`  
-Enable it and add: `http://YOUR_IP:3000`  
-Relaunch Chrome.
-
-## Tech Stack
-
-- Node.js + Express (server)
-- WebSocket (chat signaling)
-- WebRTC (peer-to-peer video/audio calls)
-- Vanilla HTML/CSS/JS (frontend)
-
-## Project Structure
-
-```
-server.js          - Backend server
+server.js                 - Entry point
+src/
+  config/index.js         - Configuration
+  middleware/
+    auth.js               - JWT authentication & RBAC
+    security.js           - Helmet, rate limiting, headers
+  models/
+    JsonStore.js          - File-based database
+    User.js               - User model with bcrypt
+    AuditLog.js           - Audit trail
+  routes/
+    auth.js               - Register, login, password
+    admin.js              - User management, stats
+    health.js             - Health check endpoint
+  services/
+    websocket.js          - WebSocket with auth, roles, admin controls
+  utils/
+    logger.js             - Winston structured logging
 public/
-  index.html       - App UI
-  style.css        - Styling
-  app.js           - Client logic
+  index.html              - Chat & call UI
+  app.js                  - Client-side logic
+  admin/index.html        - Admin dashboard
 ```
 
 ## License

@@ -1,3 +1,6 @@
 node_modules/
 cert.pem
 key.pem
+data/
+logs/
+.env

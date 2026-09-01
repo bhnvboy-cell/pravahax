@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PravahaX Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+    h1 { color: #e94560; margin-bottom: 20px; }
+    .login { max-width: 400px; margin: 100px auto; }
+    .login input { display: block; width: 100%; padding: 12px; margin-bottom: 12px; background: #16213e; border: 1px solid #333; border-radius: 8px; color: #eee; font-size: 1rem; }
+    .login button { width: 100%; padding: 12px; background: #e94560; color: #fff; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; }
+    .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat { background: #16213e; padding: 20px; border-radius: 12px; text-align: center; }
+    .stat .num { font-size: 2rem; color: #e94560; font-weight: bold; }
+    .stat .label { color: #a8a8b3; font-size: 0.85rem; margin-top: 4px; }
+    .panel { background: #16213e; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+    .panel h2 { color: #a8a8b3; font-size: 1rem; margin-bottom: 16px; text-transform: uppercase; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #333; }
+    th { color: #a8a8b3; font-size: 0.8rem; text-transform: uppercase; }
+    td { font-size: 0.9rem; }
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; }
+    .badge.admin { background: #e94560; color: #fff; }
+    .badge.user { background: #333; color: #a8a8b3; }
+    .badge.active { background: #4ade80; color: #000; }
+    .badge.banned { background: #e94560; color: #fff; }
+    .btn { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; margin-right: 4px; }
+    .btn-danger { background: #e94560; color: #fff; }
+    .btn-warning { background: #f59e0b; color: #000; }
+    .btn-success { background: #4ade80; color: #000; }
+    .btn:hover { opacity: 0.8; }
+    .broadcast { display: flex; gap: 8px; margin-top: 12px; }
+    .broadcast input { flex: 1; padding: 10px; background: #0f3460; border: 1px solid #333; border-radius: 8px; color: #eee; }
+    .broadcast button { padding: 10px 20px; background: #e94560; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+    .log { max-height: 300px; overflow-y: auto; font-size: 0.8rem; font-family: monospace; }
+    .log-entry { padding: 6px 0; border-bottom: 1px solid #222; }
+    .log-entry .action { color: #e94560; }
+    .log-entry .time { color: #666; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="admin-login" class="login">
+    <h1>PravahaX Admin</h1>
+    <input type="text" id="admin-user" placeholder="Username" />
+    <input type="password" id="admin-pass" placeholder="Password" />
+    <button onclick="adminLogin()">Login</button>
+    <p id="admin-error" style="color:#e94560;margin-top:12px"></p>
+  </div>
+
+  <div id="admin-panel" class="hidden">
+    <h1>PravahaX Admin Panel</h1>
+    <div class="dashboard" id="stats"></div>
+
+    <div class="panel">
+      <h2>Online Users</h2>
+      <div id="online-users">Loading...</div>
+    </div>
+
+    <div class="panel">
+      <h2>Broadcast Message</h2>
+      <div class="broadcast">
+        <input type="text" id="broadcast-msg" placeholder="Type broadcast message..." />
+        <button onclick="sendBroadcast()">Send to All</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Registered Users</h2>
+      <table>
+        <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
+        <tbody id="users-table"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>Audit Log</h2>
+      <div class="log" id="audit-log"></div>
+    </div>
+  </div>
+
+  <script>
+    let adminToken = '';
+
+    async function adminLogin() {
+      const username = document.getElementById('admin-user').value;
+      const password = document.getElementById('admin-pass').value;
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+        if (data.error) { document.getElementById('admin-error').textContent = data.error; return; }
+        if (data.user.role !== 'admin') { document.getElementById('admin-error').textContent = 'Admin access required'; return; }
+        adminToken = data.token;
+        document.getElementById('admin-login').classList.add('hidden');
+        document.getElementById('admin-panel').classList.remove('hidden');
+        loadDashboard();
+      } catch (e) {
+        document.getElementById('admin-error').textContent = 'Connection failed';
+      }
+    }
+
+    async function loadDashboard() {
+      const headers = { 'Authorization': 'Bearer ' + adminToken };
+
+      const statsRes = await fetch('/api/admin/stats', { headers });
+      const stats = await statsRes.json();
+      document.getElementById('stats').innerHTML = `
+        <div class="stat"><div class="num">${stats.totalUsers}</div><div class="label">Total Users</div></div>
+        <div class="stat"><div class="num">${stats.activeUsers}</div><div class="label">Active</div></div>
+        <div class="stat"><div class="num">${stats.bannedUsers}</div><div class="label">Banned</div></div>
+        <div class="stat"><div class="num">${stats.adminUsers}</div><div class="label">Admins</div></div>
+        <div class="stat"><div class="num">${stats.recentLogins}</div><div class="label">Total Logins</div></div>
+      `;
+
+      const usersRes = await fetch('/api/admin/users', { headers });
+      const usersData = await usersRes.json();
+      document.getElementById('users-table').innerHTML = usersData.users.map(u => `
+        <tr>
+          <td>${esc(u.username)}</td>
+          <td><span class="badge ${u.role}">${u.role}</span></td>
+          <td><span class="badge ${u.status}">${u.status}</span></td>
+          <td>${u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : 'Never'}</td>
+          <td>
+            ${u.role !== 'admin' ? `<button class="btn btn-warning" onclick="toggleBan('${u.id}','${u.status}')">${u.status === 'active' ? 'Ban' : 'Unban'}</button>` : ''}
+            ${u.role !== 'admin' ? `<button class="btn btn-danger" onclick="deleteUser('${u.id}')">Delete</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+
+      const logRes = await fetch('/api/admin/audit?limit=30', { headers });
+      const logData = await logRes.json();
+      document.getElementById('audit-log').innerHTML = logData.logs.map(l => `
+        <div class="log-entry">
+          <span class="time">${new Date(l.timestamp).toLocaleString()}</span>
+          <span class="action">${l.action}</span>
+          ${l.details?.username || l.details?.targetUsername || ''}
+          ${l.ip ? '(' + l.ip + ')' : ''}
+        </div>
+      `).join('');
+
+      const onlineRes = await fetch('/api/online');
+      const onlineData = await onlineRes.json();
+      document.getElementById('online-users').innerHTML = onlineData.users.length === 0 ? 'No users online' :
+        '<table><thead><tr><th>Username</th><th>Role</th><th>Connected</th><th>Action</th></tr></thead><tbody>' +
+        onlineData.users.map(u => `<tr><td>${esc(u.username)}</td><td><span class="badge ${u.role}">${u.role}</span></td><td>${new Date(u.connectedAt).toLocaleTimeString()}</td><td>${u.role !== 'admin' ? `<button class="btn btn-danger" onclick="kickUser('${u.id}')">Kick</button>` : ''}</td></tr>`).join('') +
+        '</tbody></table>';
+    }
+
+    async function toggleBan(id, currentStatus) {
+      await fetch('/api/admin/users/' + id + '/status', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+        body: JSON.stringify({ status: currentStatus === 'active' ? 'banned' : 'active' }),
+      });
+      loadDashboard();
+    }
+
+    async function deleteUser(id) {
+      if (!confirm('Delete this user?')) return;
+      await fetch('/api/admin/users/' + id, {
+        method: 'DELETE', headers: { 'Authorization': 'Bearer ' + adminToken },
+      });
+      loadDashboard();
+    }
+
+    async function kickUser(id) {
+      await fetch('/api/admin/kick', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: id, adminToken }),
+      });
+      loadDashboard();
+    }
+
+    async function sendBroadcast() {
+      const msg = document.getElementById('broadcast-msg').value.trim();
+      if (!msg) return;
+      const wsUrl = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const broadcastWs = new WebSocket(`${wsUrl}//${location.host}`);
+      broadcastWs.onopen = () => {
+        broadcastWs.send(JSON.stringify({ type: 'auth', token: adminToken }));
+        setTimeout(() => {
+          broadcastWs.send(JSON.stringify({ type: 'admin-broadcast', message: msg }));
+          document.getElementById('broadcast-msg').value = '';
+          setTimeout(() => broadcastWs.close(), 500);
+        }, 500);
+      };
+    }
+
+    function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    setInterval(() => { if (adminToken) loadDashboard(); }, 10000);
+  </script>
+</body>
+</html>

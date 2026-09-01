@@ -1,13 +1,15 @@
-let ws, myId, myUsername;
-let localStream;
-let remotePeerId;
-let pc;
+let ws, token, currentUser;
+let localStream, remotePeerId, pc;
+let micOn = true, camOn = true;
 
-const loginScreen = document.getElementById('login-screen');
+const authScreen = document.getElementById('auth-screen');
 const appScreen = document.getElementById('app-screen');
-const usernameInput = document.getElementById('username-input');
-const joinBtn = document.getElementById('join-btn');
+const loginForm = document.getElementById('login-form');
+const registerForm = document.getElementById('register-form');
+const authError = document.getElementById('auth-error');
 const userList = document.getElementById('user-list');
+const onlineCount = document.getElementById('online-count');
+const currentUserEl = document.getElementById('current-user');
 const messages = document.getElementById('messages');
 const msgInput = document.getElementById('msg-input');
 const sendBtn = document.getElementById('send-btn');
@@ -25,56 +27,107 @@ const callerName = document.getElementById('caller-name');
 const acceptCallBtn = document.getElementById('accept-call');
 const rejectCallBtn = document.getElementById('reject-call');
 
-let users = [];
-let micOn = true, camOn = true;
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loginForm.classList.toggle('hidden', btn.dataset.tab !== 'login');
+    registerForm.classList.toggle('hidden', btn.dataset.tab !== 'register');
+    authError.textContent = '';
+  });
+});
 
-joinBtn.addEventListener('click', join);
-usernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (data.error) { authError.textContent = data.error; return; }
+    token = data.token;
+    currentUser = data.user;
+    startApp();
+  } catch (err) {
+    authError.textContent = 'Connection failed';
+  }
+});
 
-function join() {
-  const name = usernameInput.value.trim();
-  if (!name) return;
-  myUsername = name;
-  myId = 'user_' + Math.random().toString(36).substr(2, 9);
-  joinBtn.disabled = true;
-  joinBtn.textContent = 'Connecting...';
+registerForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('reg-username').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password }),
+    });
+    const data = await res.json();
+    if (data.error) { authError.textContent = data.error; return; }
+    token = data.token;
+    currentUser = data.user;
+    startApp();
+  } catch (err) {
+    authError.textContent = 'Connection failed';
+  }
+});
 
+function startApp() {
+  authScreen.classList.remove('active');
+  appScreen.classList.add('active');
+  currentUserEl.textContent = currentUser.username + (currentUser.role === 'admin' ? ' (Admin)' : '');
+
+  try {
+    if (navigator.mediaDevices) {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+        localStream = stream;
+        localVideo.srcObject = stream;
+      }).catch(() => {});
+    }
+  } catch (e) {}
+
+  connectWebSocket();
+}
+
+function connectWebSocket() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${location.host}`);
 
-  ws.onopen = async () => {
-    ws.send(JSON.stringify({ type: 'join', userId: myId, username: myUsername }));
-    loginScreen.classList.remove('active');
-    appScreen.classList.add('active');
-    joinBtn.disabled = false;
-    joinBtn.textContent = 'Join';
-    try {
-      if (navigator.mediaDevices) {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        localVideo.srcObject = localStream;
-      }
-    } catch (e) {
-      console.warn('Camera/mic not available:', e.message);
-      try {
-        if (navigator.mediaDevices) {
-          localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        }
-      } catch (e2) {
-        console.warn('No media available:', e2.message);
-      }
-    }
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: 'auth', token }));
   };
 
   ws.onmessage = async (event) => {
     const msg = JSON.parse(event.data);
 
     switch (msg.type) {
+      case 'auth-success':
+        appendSystemMessage('Connected as ' + msg.user.username);
+        break;
+      case 'auth-error':
+        authError.textContent = msg.error;
+        authScreen.classList.add('active');
+        appScreen.classList.remove('active');
+        break;
       case 'user-list':
-        users = msg.users.filter(u => u.id !== myId);
-        renderUsers();
+        renderUsers(msg.users);
         break;
       case 'chat':
-        appendMessage(msg.username, msg.message, msg.from === myId, msg.timestamp);
+        appendMessage(msg.username, msg.message, msg.from === currentUser.id, msg.timestamp);
+        break;
+      case 'admin-message':
+        appendSystemMessage('[Admin] ' + msg.message);
+        break;
+      case 'kicked':
+        alert('You have been kicked by an admin');
+        location.reload();
+        break;
+      case 'server-shutdown':
+        appendSystemMessage('Server: ' + msg.message);
         break;
       case 'call-request':
         remotePeerId = msg.from;
@@ -83,7 +136,8 @@ function join() {
         acceptCallBtn.onclick = async () => {
           incomingCallModal.classList.add('hidden');
           try {
-            await startLocalStream();
+            if (!localStream) localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localVideo.srcObject = localStream;
             createPeerConnection();
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
@@ -92,9 +146,7 @@ function join() {
             callStatus.textContent = 'Calling ' + msg.username + '...';
             chatView.classList.add('hidden');
             callView.classList.remove('hidden');
-          } catch (e) {
-            alert('Camera/microphone error: ' + e.message);
-          }
+          } catch (e) { alert('Camera/mic error: ' + e.message); }
         };
         rejectCallBtn.onclick = () => {
           incomingCallModal.classList.add('hidden');
@@ -108,7 +160,8 @@ function join() {
         acceptCallBtn.onclick = async () => {
           incomingCallModal.classList.add('hidden');
           try {
-            await startLocalStream();
+            if (!localStream) localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localVideo.srcObject = localStream;
             createPeerConnection();
             await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
             const answer = await pc.createAnswer();
@@ -118,9 +171,7 @@ function join() {
             callStatus.textContent = 'Connected';
             chatView.classList.add('hidden');
             callView.classList.remove('hidden');
-          } catch (e) {
-            alert('Camera/microphone error: ' + e.message);
-          }
+          } catch (e) { alert('Camera/mic error: ' + e.message); }
         };
         rejectCallBtn.onclick = () => {
           incomingCallModal.classList.add('hidden');
@@ -140,19 +191,41 @@ function join() {
       case 'call-end':
         endCall();
         break;
+      case 'pong':
+        break;
     }
   };
 
-  ws.onerror = () => alert('Connection error');
-  ws.onclose = () => setTimeout(() => location.reload(), 2000);
+  ws.onclose = () => {
+    appendSystemMessage('Disconnected. Reconnecting...');
+    setTimeout(connectWebSocket, 3000);
+  };
+
+  ws.onerror = () => {};
+
+  setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ping' }));
+    }
+  }, 25000);
 }
 
-function renderUsers() {
+function renderUsers(list) {
   userList.innerHTML = '';
-  users.forEach(u => {
+  onlineCount.textContent = list.length;
+  list.forEach(u => {
     const li = document.createElement('li');
+    if (u.role === 'admin') li.classList.add('admin');
     li.textContent = u.username;
-    li.onclick = () => startCall(u);
+    if (u.id !== currentUser.id) {
+      li.onclick = () => startCall(u);
+    }
+    if (u.role === 'admin') {
+      const badge = document.createElement('span');
+      badge.className = 'role-badge';
+      badge.textContent = 'ADMIN';
+      li.appendChild(badge);
+    }
     userList.appendChild(li);
   });
 }
@@ -161,15 +234,23 @@ function appendMessage(username, text, mine, timestamp) {
   const div = document.createElement('div');
   div.className = 'msg' + (mine ? ' mine' : '');
   const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  div.innerHTML = `${mine ? '' : `<div class="sender">${escapeHtml(username)}</div>`}<div class="text">${escapeHtml(text)}</div><div class="time">${time}</div>`;
+  div.innerHTML = `${mine ? '' : `<div class="sender">${esc(username)}</div>`}<div class="text">${esc(text)}</div><div class="time">${time}</div>`;
   messages.appendChild(div);
   messages.scrollTop = messages.scrollHeight;
 }
 
-function escapeHtml(text) {
+function appendSystemMessage(text) {
   const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  div.className = 'msg system';
+  div.innerHTML = `<div class="text">${esc(text)}</div>`;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function esc(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
 }
 
 sendBtn.addEventListener('click', sendMessage);
@@ -178,16 +259,8 @@ msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage
 function sendMessage() {
   const text = msgInput.value.trim();
   if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
-  ws.send(JSON.stringify({ type: 'chat', from: myId, message: text }));
+  ws.send(JSON.stringify({ type: 'chat', message: text }));
   msgInput.value = '';
-}
-
-async function startLocalStream() {
-  if (localStream) return localStream;
-  if (!navigator.mediaDevices) throw new Error('Camera/mic not supported on this connection. Use HTTPS or the Chrome flag.');
-  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-  localVideo.srcObject = localStream;
-  return localStream;
 }
 
 function createPeerConnection() {
@@ -245,4 +318,14 @@ toggleCam.addEventListener('click', () => {
   localStream.getVideoTracks().forEach(t => t.enabled = camOn);
   toggleCam.textContent = camOn ? 'Cam Off' : 'Cam On';
   toggleCam.classList.toggle('active', !camOn);
+});
+
+document.getElementById('logout-btn').addEventListener('click', () => {
+  token = null;
+  currentUser = null;
+  if (ws) ws.close();
+  appScreen.classList.remove('active');
+  authScreen.classList.add('active');
+  messages.innerHTML = '';
+  location.reload();
 });

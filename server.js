@@ -2,71 +2,82 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
-const os = require('os');
+const config = require('./src/config');
+const { setupSecurity } = require('./src/middleware/security');
+const { setupWebSocket, setWss, getOnlineUsers, kickUser } = require('./src/services/websocket');
+const { healthCheck } = require('./src/routes/health');
+const authRoutes = require('./src/routes/auth');
+const adminRoutes = require('./src/routes/admin');
+const auditLog = require('./src/models/AuditLog');
+const userModel = require('./src/models/User');
+const logger = require('./src/utils/logger');
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+setWss(wss);
+
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+setupSecurity(app);
 
-const users = new Map();
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.get('/api/health', healthCheck(wss));
 
-wss.on('connection', (ws) => {
-  let userId = null;
-  console.log('WebSocket connected, total:', wss.clients.size);
-
-  ws.on('message', (data) => {
-    try {
-      const msg = JSON.parse(data);
-      switch (msg.type) {
-        case 'join':
-          userId = msg.userId;
-          users.set(userId, { ws, username: msg.username });
-          console.log(`${msg.username} joined. Online: ${users.size}`);
-          broadcast({ type: 'user-list', users: Array.from(users.entries()).map(([id, u]) => ({ id, username: u.username })) });
-          break;
-        case 'chat':
-          const s = users.get(msg.from);
-          broadcast({ type: 'chat', from: msg.from, username: s?.username, message: msg.message, timestamp: Date.now() });
-          break;
-        case 'call-request':
-        case 'call-accept':
-        case 'call-reject':
-        case 'call-end':
-        case 'offer':
-        case 'answer':
-        case 'ice-candidate':
-          const t = users.get(msg.to);
-          if (t && t.ws.readyState === WebSocket.OPEN) {
-            t.ws.send(JSON.stringify({ ...msg, from: userId, username: users.get(userId)?.username }));
-          }
-          break;
-      }
-    } catch (e) {
-      console.error('Error:', e);
-    }
-  });
-
-  ws.on('close', () => {
-    if (userId) {
-      const u = users.get(userId);
-      console.log(`${u?.username || userId} left. Online: ${users.size - 1}`);
-      users.delete(userId);
-      broadcast({ type: 'user-list', users: Array.from(users.entries()).map(([id, u]) => ({ id, username: u.username })) });
-    }
-  });
+app.get('/api/online', (req, res) => {
+  res.json({ users: getOnlineUsers() });
 });
 
-function broadcast(msg) {
-  const data = JSON.stringify(msg);
+app.post('/api/admin/kick', (req, res) => {
+  const { userId, adminToken } = req.body;
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(adminToken, config.jwtSecret);
+    const admin = userModel.findById(decoded.id);
+    if (!admin || admin.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const kicked = kickUser(userId, admin.username);
+    if (kicked) {
+      auditLog.log('user_kicked', admin.id, { targetId: userId, ip: req.ip });
+      res.json({ message: 'User kicked' });
+    } else {
+      res.status(404).json({ error: 'User not online' });
+    }
+  } catch (e) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
+setupWebSocket(wss);
+
+function gracefulShutdown(signal) {
+  logger.info(`${signal} received, shutting down gracefully...`);
   wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) client.send(data);
+    client.send(JSON.stringify({ type: 'server-shutdown', message: 'Server restarting...' }));
+    client.close();
   });
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 5000);
 }
 
-const PORT = process.env.PORT || 3000;
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception', { error: err.message, stack: err.stack });
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection', { reason: String(reason) });
+});
+
+const PORT = config.port;
 server.listen(PORT, '0.0.0.0', () => {
+  const os = require('os');
   const interfaces = os.networkInterfaces();
   let localIP = 'localhost';
   for (const name of Object.keys(interfaces)) {
@@ -74,7 +85,10 @@ server.listen(PORT, '0.0.0.0', () => {
       if (iface.family === 'IPv4' && !iface.internal) localIP = iface.address;
     }
   }
-  console.log(`PravahaX running at:`);
-  console.log(`  Local:   http://localhost:${PORT}`);
-  console.log(`  Network: http://${localIP}:${PORT}`);
+
+  logger.info('PravahaX Enterprise started');
+  logger.info(`  Local:   http://localhost:${PORT}`);
+  logger.info(`  Network: http://${localIP}:${PORT}`);
+  logger.info(`  Health:  http://localhost:${PORT}/api/health`);
+  logger.info(`  Admin:   ${config.admin.defaultUsername} / ${config.admin.defaultPassword}`);
 });
