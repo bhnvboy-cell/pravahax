@@ -1,0 +1,16 @@
+
+Rule Name:                            PravahaX PeerJS
+----------------------------------------------------------------------
+Enabled:                              Yes
+Direction:                            In
+Profiles:                             Domain,Private,Public
+Grouping:                             
+LocalIP:                              Any
+RemoteIP:                             Any
+Protocol:                             TCP
+LocalPort:                            9000
+RemotePort:                           Any
+Edge traversal:                       No
+Action:                               Allow
+Ok.
+

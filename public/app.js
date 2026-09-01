@@ -1,6 +1,5 @@
 let ws, myId, myUsername;
 let localStream;
-let currentCall;
 let remotePeerId;
 let pc;
 
@@ -39,15 +38,11 @@ function join() {
   myId = 'user_' + Math.random().toString(36).substr(2, 9);
   joinBtn.disabled = true;
   joinBtn.textContent = 'Connecting...';
-  connectWebSocket();
-}
 
-function connectWebSocket() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${location.host}`);
 
   ws.onopen = () => {
-    console.log('WebSocket connected');
     ws.send(JSON.stringify({ type: 'join', userId: myId, username: myUsername }));
     loginScreen.classList.remove('active');
     appScreen.classList.add('active');
@@ -55,110 +50,86 @@ function connectWebSocket() {
     joinBtn.textContent = 'Join';
   };
 
-  ws.onmessage = handleWSMessage;
+  ws.onmessage = async (event) => {
+    const msg = JSON.parse(event.data);
 
-  ws.onerror = (err) => {
-    console.error('WebSocket error:', err);
+    switch (msg.type) {
+      case 'user-list':
+        users = msg.users.filter(u => u.id !== myId);
+        renderUsers();
+        break;
+      case 'chat':
+        appendMessage(msg.username, msg.message, msg.from === myId, msg.timestamp);
+        break;
+      case 'call-request':
+        remotePeerId = msg.from;
+        callerName.textContent = msg.username;
+        incomingCallModal.classList.remove('hidden');
+        acceptCallBtn.onclick = async () => {
+          incomingCallModal.classList.add('hidden');
+          try {
+            await startLocalStream();
+            createPeerConnection();
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            ws.send(JSON.stringify({ type: 'offer', to: msg.from, offer: pc.localDescription }));
+            callPeerName.textContent = msg.username;
+            callStatus.textContent = 'Calling ' + msg.username + '...';
+            chatView.classList.add('hidden');
+            callView.classList.remove('hidden');
+          } catch (e) {
+            alert('Camera/microphone error: ' + e.message);
+          }
+        };
+        rejectCallBtn.onclick = () => {
+          incomingCallModal.classList.add('hidden');
+          ws.send(JSON.stringify({ type: 'call-reject', to: msg.from }));
+        };
+        break;
+      case 'offer':
+        remotePeerId = msg.from;
+        callerName.textContent = msg.username;
+        incomingCallModal.classList.remove('hidden');
+        acceptCallBtn.onclick = async () => {
+          incomingCallModal.classList.add('hidden');
+          try {
+            await startLocalStream();
+            createPeerConnection();
+            await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({ type: 'answer', to: msg.from, answer: pc.localDescription }));
+            callPeerName.textContent = msg.username;
+            callStatus.textContent = 'Connected';
+            chatView.classList.add('hidden');
+            callView.classList.remove('hidden');
+          } catch (e) {
+            alert('Camera/microphone error: ' + e.message);
+          }
+        };
+        rejectCallBtn.onclick = () => {
+          incomingCallModal.classList.add('hidden');
+          ws.send(JSON.stringify({ type: 'call-reject', to: msg.from }));
+        };
+        break;
+      case 'answer':
+        if (pc) await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
+        break;
+      case 'ice-candidate':
+        if (pc && msg.candidate) await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+        break;
+      case 'call-reject':
+        endCall();
+        alert('Call rejected');
+        break;
+      case 'call-end':
+        endCall();
+        break;
+    }
   };
 
-  ws.onclose = () => {
-    console.log('WebSocket closed, reconnecting in 2s...');
-    setTimeout(connectWebSocket, 2000);
-  };
-}
-
-async function handleWSMessage(event) {
-  const msg = JSON.parse(event.data);
-
-  switch (msg.type) {
-    case 'user-list':
-      users = msg.users.filter(u => u.id !== myId);
-      renderUsers();
-      break;
-    case 'chat':
-      appendMessage(msg.username, msg.message, msg.from === myId, msg.timestamp);
-      break;
-    case 'call-request':
-      remotePeerId = msg.from;
-      callerName.textContent = msg.username;
-      incomingCallModal.classList.remove('hidden');
-
-      acceptCallBtn.onclick = async () => {
-        incomingCallModal.classList.add('hidden');
-        try {
-          await startLocalStream();
-          createPeerConnection();
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          ws.send(JSON.stringify({ type: 'offer', to: msg.from, offer: pc.localDescription }));
-          callPeerName.textContent = msg.username;
-          callStatus.textContent = 'Calling ' + msg.username + '...';
-          chatView.classList.add('hidden');
-          callView.classList.remove('hidden');
-        } catch (e) {
-          console.error('Failed to start call:', e);
-          alert('Could not access camera/microphone: ' + e.message);
-        }
-      };
-
-      rejectCallBtn.onclick = () => {
-        incomingCallModal.classList.add('hidden');
-        ws.send(JSON.stringify({ type: 'call-reject', to: msg.from }));
-      };
-      break;
-
-    case 'offer':
-      remotePeerId = msg.from;
-      callerName.textContent = msg.username;
-      incomingCallModal.classList.remove('hidden');
-
-      acceptCallBtn.onclick = async () => {
-        incomingCallModal.classList.add('hidden');
-        try {
-          await startLocalStream();
-          createPeerConnection();
-          await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          ws.send(JSON.stringify({ type: 'answer', to: msg.from, answer: pc.localDescription }));
-          callPeerName.textContent = msg.username;
-          callStatus.textContent = 'Connected';
-          chatView.classList.add('hidden');
-          callView.classList.remove('hidden');
-        } catch (e) {
-          console.error('Failed to answer call:', e);
-          alert('Could not access camera/microphone: ' + e.message);
-        }
-      };
-
-      rejectCallBtn.onclick = () => {
-        incomingCallModal.classList.add('hidden');
-        ws.send(JSON.stringify({ type: 'call-reject', to: msg.from }));
-      };
-      break;
-
-    case 'answer':
-      if (pc) {
-        await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
-        callStatus.textContent = 'Connected';
-      }
-      break;
-
-    case 'ice-candidate':
-      if (pc && msg.candidate) {
-        await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
-      }
-      break;
-
-    case 'call-reject':
-      endCall();
-      alert('Call rejected');
-      break;
-
-    case 'call-end':
-      endCall();
-      break;
-  }
+  ws.onerror = () => alert('Connection error');
+  ws.onclose = () => setTimeout(() => location.reload(), 2000);
 }
 
 function renderUsers() {
@@ -202,28 +173,16 @@ async function startLocalStream() {
 }
 
 function createPeerConnection() {
-  pc = new RTCPeerConnection({
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-  });
-
+  pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-  pc.ontrack = (event) => {
-    remoteVideo.srcObject = event.streams[0];
-  };
-
+  pc.ontrack = (event) => { remoteVideo.srcObject = event.streams[0]; };
   pc.onicecandidate = (event) => {
     if (event.candidate && remotePeerId) {
       ws.send(JSON.stringify({ type: 'ice-candidate', to: remotePeerId, candidate: event.candidate }));
     }
   };
-
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') {
-      callStatus.textContent = 'Connected';
-    } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-      endCall();
-    }
+    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') endCall();
   };
 }
 
@@ -244,12 +203,9 @@ function endCall() {
   remotePeerId = null;
   callView.classList.add('hidden');
   chatView.classList.remove('hidden');
-  micOn = true;
-  camOn = true;
-  toggleMic.textContent = 'Mute';
-  toggleMic.classList.remove('active');
-  toggleCam.textContent = 'Cam Off';
-  toggleCam.classList.remove('active');
+  micOn = true; camOn = true;
+  toggleMic.textContent = 'Mute'; toggleMic.classList.remove('active');
+  toggleCam.textContent = 'Cam Off'; toggleCam.classList.remove('active');
 }
 
 endCallBtn.addEventListener('click', () => {
