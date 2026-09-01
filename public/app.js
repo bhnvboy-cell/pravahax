@@ -49,10 +49,19 @@ function join() {
     joinBtn.disabled = false;
     joinBtn.textContent = 'Join';
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localVideo.srcObject = localStream;
+      if (navigator.mediaDevices) {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localVideo.srcObject = localStream;
+      }
     } catch (e) {
       console.warn('Camera/mic not available:', e.message);
+      try {
+        if (navigator.mediaDevices) {
+          localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+      } catch (e2) {
+        console.warn('No media available:', e2.message);
+      }
     }
   };
 
@@ -175,6 +184,7 @@ function sendMessage() {
 
 async function startLocalStream() {
   if (localStream) return localStream;
+  if (!navigator.mediaDevices) throw new Error('Camera/mic not supported on this connection. Use HTTPS or the Chrome flag.');
   localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   localVideo.srcObject = localStream;
   return localStream;
