@@ -1,6 +1,9 @@
 let ws, token, currentUser;
 let localStream, remotePeerId, pc;
 let micOn = true, camOn = true;
+let pingInterval = null;
+let reconnectTimeout = null;
+let connected = false;
 
 const authScreen = document.getElementById('auth-screen');
 const appScreen = document.getElementById('app-screen');
@@ -41,6 +44,7 @@ loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const username = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value;
+  authError.textContent = '';
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -61,6 +65,7 @@ registerForm.addEventListener('submit', async (e) => {
   const username = document.getElementById('reg-username').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   const password = document.getElementById('reg-password').value;
+  authError.textContent = '';
   try {
     const res = await fetch('/api/auth/register', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -80,6 +85,7 @@ function startApp() {
   authScreen.classList.remove('active');
   appScreen.classList.add('active');
   currentUserEl.textContent = currentUser.username + (currentUser.role === 'admin' ? ' (Admin)' : '');
+  messages.innerHTML = '';
 
   try {
     if (navigator.mediaDevices) {
@@ -94,19 +100,40 @@ function startApp() {
 }
 
 function connectWebSocket() {
+  if (reconnectTimeout) { clearTimeout(reconnectTimeout); reconnectTimeout = null; }
+  if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+  connected = false;
+
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${location.host}`);
 
   ws.onopen = () => {
+    console.log('WS connected, sending auth');
     ws.send(JSON.stringify({ type: 'auth', token }));
   };
 
   ws.onmessage = async (event) => {
-    const msg = JSON.parse(event.data);
+    let msg;
+    try {
+      msg = JSON.parse(event.data);
+    } catch (e) {
+      console.error('Failed to parse WS message:', event.data);
+      return;
+    }
+
+    console.log('WS message:', msg.type);
 
     switch (msg.type) {
       case 'auth-success':
+        connected = true;
+        currentUser = msg.user;
+        currentUserEl.textContent = currentUser.username + (currentUser.role === 'admin' ? ' (Admin)' : '');
         appendSystemMessage('Connected as ' + msg.user.username);
+        pingInterval = setInterval(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }));
+          }
+        }, 25000);
         break;
       case 'message-history':
         if (msg.messages && msg.messages.length > 0) {
@@ -117,8 +144,8 @@ function connectWebSocket() {
         break;
       case 'auth-error':
         authError.textContent = msg.error;
-        authScreen.classList.add('active');
         appScreen.classList.remove('active');
+        authScreen.classList.add('active');
         break;
       case 'user-list':
         renderUsers(msg.users);
@@ -204,17 +231,17 @@ function connectWebSocket() {
   };
 
   ws.onclose = () => {
-    appendSystemMessage('Disconnected. Reconnecting...');
-    setTimeout(connectWebSocket, 3000);
+    connected = false;
+    if (pingInterval) { clearInterval(pingInterval); pingInterval = null; }
+    if (appScreen.classList.contains('active')) {
+      appendSystemMessage('Disconnected. Reconnecting...');
+      reconnectTimeout = setTimeout(connectWebSocket, 3000);
+    }
   };
 
-  ws.onerror = () => {};
-
-  setInterval(() => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'ping' }));
-    }
-  }, 25000);
+  ws.onerror = (err) => {
+    console.error('WebSocket error:', err);
+  };
 }
 
 function renderUsers(list) {
@@ -240,7 +267,7 @@ function renderUsers(list) {
       const callBtn = document.createElement('button');
       callBtn.className = 'call-btn';
       callBtn.innerHTML = '&#128222;';
-      callBtn.title = 'Audio/Video Call';
+      callBtn.title = 'Call ' + u.username;
       callBtn.onclick = (e) => { e.stopPropagation(); startCall(u); };
       li.appendChild(callBtn);
     }
@@ -342,9 +369,11 @@ toggleCam.addEventListener('click', () => {
 document.getElementById('logout-btn').addEventListener('click', () => {
   token = null;
   currentUser = null;
+  connected = false;
+  if (pingInterval) clearInterval(pingInterval);
+  if (reconnectTimeout) clearTimeout(reconnectTimeout);
   if (ws) ws.close();
   appScreen.classList.remove('active');
   authScreen.classList.add('active');
   messages.innerHTML = '';
-  location.reload();
 });
