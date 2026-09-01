@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PravahaX</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login-screen" class="screen active">
+    <div class="login-box">
+      <h1>PravahaX</h1>
+      <p>Local Network Chat & Call</p>
+      <input type="text" id="username-input" placeholder="Enter your name" maxlength="20" />
+      <button id="join-btn">Join</button>
+    </div>
+  </div>
+
+  <div id="app-screen" class="screen">
+    <aside id="sidebar">
+      <h2>Online Users</h2>
+      <ul id="user-list"></ul>
+    </aside>
+    <main id="main">
+      <div id="chat-view">
+        <div id="messages"></div>
+        <div id="chat-input-area">
+          <input type="text" id="msg-input" placeholder="Type a message..." />
+          <button id="send-btn">Send</button>
+        </div>
+      </div>
+      <div id="call-view" class="hidden">
+        <div id="call-info">
+          <h3 id="call-status">Calling...</h3>
+          <p id="call-peer-name"></p>
+        </div>
+        <div id="video-container">
+          <video id="remote-video" autoplay playsinline></video>
+          <video id="local-video" autoplay playsinline muted></video>
+        </div>
+        <div id="call-controls">
+          <button id="toggle-mic" class="ctrl-btn">Mute</button>
+          <button id="toggle-cam" class="ctrl-btn">Cam Off</button>
+          <button id="end-call" class="ctrl-btn end">End Call</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="incoming-call" class="modal hidden">
+    <div class="modal-box">
+      <p id="caller-name"></p>
+      <h3>Incoming Call</h3>
+      <div class="modal-actions">
+        <button id="accept-call" class="accept">Accept</button>
+        <button id="reject-call" class="reject">Reject</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

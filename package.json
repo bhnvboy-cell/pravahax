@@ -1,0 +1,15 @@
+{
+  "name": "pravahax",
+  "version": "1.0.0",
+  "description": "Local network chat and call app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "peer": "^1.0.1",
+    "ws": "^8.16.0"
+  }
+}
