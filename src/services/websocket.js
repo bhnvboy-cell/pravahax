@@ -5,6 +5,11 @@ const messageStore = require('../models/Message');
 const auditLog = require('../models/AuditLog');
 const logger = require('../utils/logger');
 
+function sanitize(text) {
+  if (!text) return '';
+  return String(text).replace(/<[^>]*>/g, '').substring(0, 2000);
+}
+
 const users = new Map();
 
 function setupWebSocket(wss) {
