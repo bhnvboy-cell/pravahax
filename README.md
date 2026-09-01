@@ -2,6 +2,8 @@
 
 Enterprise-grade local network chat and video call platform.
 
+![PravahaX Screenshot](screenshot.png)
+
 ## Features
 
 ### Core
