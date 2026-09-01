@@ -1,7 +1,8 @@
-let ws, peer, myId, myUsername;
+let ws, myId, myUsername;
 let localStream;
 let currentCall;
 let remotePeerId;
+let pc;
 
 const loginScreen = document.getElementById('login-screen');
 const appScreen = document.getElementById('app-screen');
@@ -27,8 +28,6 @@ const rejectCallBtn = document.getElementById('reject-call');
 
 let users = [];
 let micOn = true, camOn = true;
-let pendingCall = null;
-let waitingForPeerCall = false;
 
 joinBtn.addEventListener('click', join);
 usernameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
@@ -38,33 +37,9 @@ function join() {
   if (!name) return;
   myUsername = name;
   myId = 'user_' + Math.random().toString(36).substr(2, 9);
-
-  peer = new Peer(myId, { path: '/peerjs', host: location.hostname, port: 9000 });
-
-  peer.on('open', (id) => {
-    console.log('PeerJS connected, id:', id);
-    connectWebSocket();
-  });
-
-  peer.on('error', (err) => {
-    console.error('PeerJS error:', err);
-    alert('Connection error: ' + err.message);
-  });
-
-  peer.on('call', (call) => {
-    console.log('Incoming peer call from:', call.peer);
-    if (waitingForPeerCall) {
-      waitingForPeerCall = false;
-      callerName.textContent = remotePeerId;
-      handleIncomingPeerCall(call);
-    } else {
-      callerName.textContent = call.peer;
-      handleIncomingPeerCall(call);
-    }
-  });
-
   joinBtn.disabled = true;
   joinBtn.textContent = 'Connecting...';
+  connectWebSocket();
 }
 
 function connectWebSocket() {
@@ -92,7 +67,7 @@ function connectWebSocket() {
   };
 }
 
-function handleWSMessage(event) {
+async function handleWSMessage(event) {
   const msg = JSON.parse(event.data);
 
   switch (msg.type) {
@@ -112,11 +87,14 @@ function handleWSMessage(event) {
         incomingCallModal.classList.add('hidden');
         try {
           await startLocalStream();
-          ws.send(JSON.stringify({ type: 'call-accept', to: msg.from }));
-          const call = peer.call(msg.from, localStream);
-          if (call) {
-            setupCall(call, msg.from);
-          }
+          createPeerConnection();
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          ws.send(JSON.stringify({ type: 'offer', to: msg.from, offer: pc.localDescription }));
+          callPeerName.textContent = msg.username;
+          callStatus.textContent = 'Calling ' + msg.username + '...';
+          chatView.classList.add('hidden');
+          callView.classList.remove('hidden');
         } catch (e) {
           console.error('Failed to start call:', e);
           alert('Could not access camera/microphone: ' + e.message);
@@ -129,18 +107,50 @@ function handleWSMessage(event) {
       };
       break;
 
-    case 'call-accept':
-      if (pendingCall) {
-        setupCall(pendingCall, remotePeerId);
-        pendingCall = null;
-      } else {
-        waitingForPeerCall = true;
+    case 'offer':
+      remotePeerId = msg.from;
+      callerName.textContent = msg.username;
+      incomingCallModal.classList.remove('hidden');
+
+      acceptCallBtn.onclick = async () => {
+        incomingCallModal.classList.add('hidden');
+        try {
+          await startLocalStream();
+          createPeerConnection();
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          ws.send(JSON.stringify({ type: 'answer', to: msg.from, answer: pc.localDescription }));
+          callPeerName.textContent = msg.username;
+          callStatus.textContent = 'Connected';
+          chatView.classList.add('hidden');
+          callView.classList.remove('hidden');
+        } catch (e) {
+          console.error('Failed to answer call:', e);
+          alert('Could not access camera/microphone: ' + e.message);
+        }
+      };
+
+      rejectCallBtn.onclick = () => {
+        incomingCallModal.classList.add('hidden');
+        ws.send(JSON.stringify({ type: 'call-reject', to: msg.from }));
+      };
+      break;
+
+    case 'answer':
+      if (pc) {
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.answer));
+        callStatus.textContent = 'Connected';
+      }
+      break;
+
+    case 'ice-candidate':
+      if (pc && msg.candidate) {
+        await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
       }
       break;
 
     case 'call-reject':
-      pendingCall = null;
-      waitingForPeerCall = false;
       endCall();
       alert('Call rejected');
       break;
@@ -149,27 +159,6 @@ function handleWSMessage(event) {
       endCall();
       break;
   }
-}
-
-function handleIncomingPeerCall(call) {
-  incomingCallModal.classList.remove('hidden');
-
-  acceptCallBtn.onclick = async () => {
-    incomingCallModal.classList.add('hidden');
-    try {
-      await startLocalStream();
-      call.answer(localStream);
-      setupCall(call, call.peer);
-    } catch (e) {
-      console.error('Failed to answer call:', e);
-      alert('Could not access camera/microphone: ' + e.message);
-    }
-  };
-
-  rejectCallBtn.onclick = () => {
-    incomingCallModal.classList.add('hidden');
-    call.close();
-  };
 }
 
 function renderUsers() {
@@ -212,6 +201,32 @@ async function startLocalStream() {
   localVideo.srcObject = localStream;
 }
 
+function createPeerConnection() {
+  pc = new RTCPeerConnection({
+    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+  });
+
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  pc.ontrack = (event) => {
+    remoteVideo.srcObject = event.streams[0];
+  };
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate && remotePeerId) {
+      ws.send(JSON.stringify({ type: 'ice-candidate', to: remotePeerId, candidate: event.candidate }));
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'connected') {
+      callStatus.textContent = 'Connected';
+    } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+      endCall();
+    }
+  };
+}
+
 function startCall(user) {
   remotePeerId = user.id;
   callPeerName.textContent = user.username;
@@ -221,33 +236,12 @@ function startCall(user) {
   ws.send(JSON.stringify({ type: 'call-request', to: user.id }));
 }
 
-function setupCall(call, peerId) {
-  currentCall = call;
-  remotePeerId = peerId;
-
-  call.on('stream', (stream) => {
-    remoteVideo.srcObject = stream;
-    callStatus.textContent = 'Connected';
-  });
-
-  call.on('close', () => {
-    console.log('Call closed');
-    endCall();
-  });
-
-  call.on('error', (err) => {
-    console.error('Call error:', err);
-    endCall();
-  });
-}
-
 function endCall() {
-  if (currentCall) { currentCall.close(); currentCall = null; }
+  if (pc) { pc.close(); pc = null; }
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   remoteVideo.srcObject = null;
   localVideo.srcObject = null;
-  pendingCall = null;
-  waitingForPeerCall = false;
+  remotePeerId = null;
   callView.classList.add('hidden');
   chatView.classList.remove('hidden');
   micOn = true;

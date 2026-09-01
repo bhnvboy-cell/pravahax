@@ -2,7 +2,6 @@ const express = require('express');
 const http = require('http');
 const https = require('https');
 const WebSocket = require('ws');
-const { PeerServer } = require('peer');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -13,7 +12,7 @@ const wss = new WebSocket.Server({ server: httpServer });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const peerServer = PeerServer({ port: 9000, path: '/peerjs' });
+const users = new Map();
 
 let httpsServer = null;
 let wssSecure = null;
@@ -29,8 +28,6 @@ if (fs.existsSync(path.join(__dirname, 'cert.pem')) && fs.existsSync(path.join(_
     console.log(`  HTTPS:   https://localhost:3001`);
   });
 }
-
-const users = new Map();
 
 function setupWebSocket(wssInstance) {
   wssInstance.on('connection', (ws) => {
@@ -49,14 +46,17 @@ function setupWebSocket(wssInstance) {
             break;
 
           case 'chat':
-            const sender = users.get(msg.from);
-            broadcast({ type: 'chat', from: msg.from, username: sender?.username, message: msg.message, timestamp: Date.now() });
+            const chatSender = users.get(msg.from);
+            broadcast({ type: 'chat', from: msg.from, username: chatSender?.username, message: msg.message, timestamp: Date.now() });
             break;
 
           case 'call-request':
           case 'call-accept':
           case 'call-reject':
           case 'call-end':
+          case 'offer':
+          case 'answer':
+          case 'ice-candidate':
             const target = users.get(msg.to);
             if (target && target.ws.readyState === WebSocket.OPEN) {
               target.ws.send(JSON.stringify({ ...msg, from: userId, username: users.get(userId)?.username }));
