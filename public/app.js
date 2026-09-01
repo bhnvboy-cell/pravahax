@@ -108,6 +108,13 @@ function connectWebSocket() {
       case 'auth-success':
         appendSystemMessage('Connected as ' + msg.user.username);
         break;
+      case 'message-history':
+        if (msg.messages && msg.messages.length > 0) {
+          msg.messages.forEach(m => {
+            appendMessage(m.username, m.message, m.from === currentUser.id, m.timestamp);
+          });
+        }
+        break;
       case 'auth-error':
         authError.textContent = msg.error;
         authScreen.classList.add('active');

@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config');
 const userModel = require('../models/User');
+const messageStore = require('../models/Message');
 const auditLog = require('../models/AuditLog');
 const logger = require('../utils/logger');
 
@@ -37,8 +38,10 @@ function setupWebSocket(wss) {
               role = user.role;
               users.set(userId, { ws, username, role, connectedAt: new Date().toISOString(), ip });
               logger.info(`User authenticated: ${username} (${role})`);
-              broadcastUserList();
               ws.send(JSON.stringify({ type: 'auth-success', user: userModel.toSafe(user) }));
+              const history = messageStore.getRecent(200);
+              ws.send(JSON.stringify({ type: 'message-history', messages: history }));
+              broadcastUserList();
             } catch (e) {
               ws.send(JSON.stringify({ type: 'auth-error', error: 'Invalid token' }));
               ws.close();
@@ -47,12 +50,19 @@ function setupWebSocket(wss) {
 
           case 'chat':
             if (!userId) return;
-            broadcast({
-              type: 'chat',
+            const saved = messageStore.save({
               from: userId,
               username,
               message: sanitize(msg.message),
               timestamp: Date.now(),
+            });
+            broadcast({
+              type: 'chat',
+              id: saved.id,
+              from: userId,
+              username,
+              message: saved.message,
+              timestamp: saved.timestamp,
             });
             break;
 
@@ -72,11 +82,19 @@ function setupWebSocket(wss) {
 
           case 'admin-broadcast':
             if (role !== 'admin') return;
-            broadcast({
-              type: 'admin-message',
-              from: 'System',
+            const bcast = messageStore.save({
+              from: 'system',
+              username: '[Admin Broadcast]',
               message: sanitize(msg.message),
               timestamp: Date.now(),
+            });
+            broadcast({
+              type: 'admin-message',
+              id: bcast.id,
+              from: 'system',
+              username: '[Admin Broadcast]',
+              message: bcast.message,
+              timestamp: bcast.timestamp,
             });
             logger.info(`Admin broadcast by ${username}: ${msg.message}`);
             break;
