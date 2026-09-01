@@ -133,7 +133,6 @@ function broadcast(msg) {
 }
 
 function broadcastUserList() {
-  const wss = users.values().next().value?.ws?.server;
   if (!wss) return;
   const list = Array.from(users.entries()).map(([id, u]) => ({
     id, username: u.username, role: u.role, connectedAt: u.connectedAt,

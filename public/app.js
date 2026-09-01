@@ -216,16 +216,28 @@ function renderUsers(list) {
   list.forEach(u => {
     const li = document.createElement('li');
     if (u.role === 'admin') li.classList.add('admin');
-    li.textContent = u.username;
-    if (u.id !== currentUser.id) {
-      li.onclick = () => startCall(u);
-    }
+
+    const info = document.createElement('span');
+    info.className = 'user-info';
+    info.textContent = u.username;
+    li.appendChild(info);
+
     if (u.role === 'admin') {
       const badge = document.createElement('span');
       badge.className = 'role-badge';
       badge.textContent = 'ADMIN';
       li.appendChild(badge);
     }
+
+    if (u.id !== currentUser.id) {
+      const callBtn = document.createElement('button');
+      callBtn.className = 'call-btn';
+      callBtn.innerHTML = '&#128222;';
+      callBtn.title = 'Audio/Video Call';
+      callBtn.onclick = (e) => { e.stopPropagation(); startCall(u); };
+      li.appendChild(callBtn);
+    }
+
     userList.appendChild(li);
   });
 }

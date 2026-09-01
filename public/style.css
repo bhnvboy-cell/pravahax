@@ -1,7 +1,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; height: 100vh; overflow: hidden; }
+body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; height: 100vh; height: 100dvh; overflow: hidden; }
 
-.screen { display: none; height: 100vh; }
+.screen { display: none; height: 100vh; height: 100dvh; }
 .screen.active { display: flex; }
 
 #auth-screen {
@@ -10,7 +10,7 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; he
 }
 .login-box {
   text-align: center; padding: 40px; background: #0f3460;
-  border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); min-width: 320px;
+  border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); min-width: 300px; max-width: 90vw;
 }
 .login-box h1 { font-size: 2.5rem; margin-bottom: 8px; color: #e94560; }
 .login-box p { margin-bottom: 20px; color: #a8a8b3; }
@@ -47,32 +47,39 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; he
 #user-list { list-style: none; flex: 1; overflow-y: auto; }
 #user-list li {
   padding: 10px 12px; margin-bottom: 4px; border-radius: 8px;
-  cursor: pointer; transition: background 0.15s; display: flex; align-items: center; gap: 8px; font-size: 0.9rem;
+  transition: background 0.15s; display: flex; align-items: center; gap: 8px; font-size: 0.9rem;
 }
 #user-list li:hover { background: #0f3460; }
 #user-list li::before { content: ''; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; flex-shrink: 0; }
 #user-list li.admin::before { background: #e94560; }
-#user-list li .role-badge {
+.user-info { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-badge {
   font-size: 0.65rem; padding: 1px 6px; border-radius: 4px;
-  background: #e94560; color: #fff; margin-left: auto;
+  background: #e94560; color: #fff; flex-shrink: 0;
 }
+.call-btn {
+  width: 36px; height: 36px; border: none; border-radius: 50%; cursor: pointer;
+  background: #4ade80; color: #000; font-size: 1rem; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0; transition: all 0.2s;
+}
+.call-btn:hover { background: #22c55e; transform: scale(1.1); }
 
 #sidebar-footer {
   border-top: 1px solid #333; padding-top: 12px; margin-top: 8px;
   display: flex; align-items: center; justify-content: space-between;
 }
-#current-user { font-size: 0.8rem; color: #a8a8b3; }
+#current-user { font-size: 0.8rem; color: #a8a8b3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #logout-btn {
   padding: 6px 12px; background: transparent; color: #e94560; border: 1px solid #e94560;
-  border-radius: 6px; cursor: pointer; font-size: 0.75rem; transition: all 0.2s;
+  border-radius: 6px; cursor: pointer; font-size: 0.75rem; transition: all 0.2s; flex-shrink: 0;
 }
 #logout-btn:hover { background: #e94560; color: #fff; }
 
-#main { flex: 1; display: flex; flex-direction: column; }
+#main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
-#chat-view { flex: 1; display: flex; flex-direction: column; }
+#chat-view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 #messages {
-  flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px;
+  flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; min-height: 0;
 }
 .msg {
   max-width: 70%; padding: 10px 14px; border-radius: 12px;
@@ -85,7 +92,7 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; he
 .msg .time { font-size: 0.65rem; color: #666; margin-top: 4px; text-align: right; }
 
 #chat-input-area {
-  display: flex; padding: 12px 20px; border-top: 1px solid #333; gap: 8px;
+  display: flex; padding: 12px 20px; border-top: 1px solid #333; gap: 8px; flex-shrink: 0;
 }
 #msg-input {
   flex: 1; padding: 12px 16px; border: 1px solid #333; border-radius: 8px;
@@ -94,7 +101,7 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; he
 #msg-input:focus { border-color: #e94560; }
 #send-btn {
   padding: 12px 24px; background: #e94560; color: #fff; border: none;
-  border-radius: 8px; cursor: pointer; font-size: 1rem; transition: background 0.2s;
+  border-radius: 8px; cursor: pointer; font-size: 1rem; transition: background 0.2s; flex-shrink: 0;
 }
 #send-btn:hover { background: #c73650; }
 
@@ -110,7 +117,7 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; he
   border: 2px solid #e94560; background: #222;
 }
 
-#call-controls { display: flex; gap: 12px; padding: 20px; }
+#call-controls { display: flex; gap: 12px; padding: 20px; flex-shrink: 0; }
 .ctrl-btn {
   padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;
   font-size: 0.9rem; background: #333; color: #eee; transition: background 0.2s;
@@ -147,22 +154,42 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; he
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
-@media (max-width: 900px) {
+/* Tablet landscape and small screens */
+@media (max-width: 1024px) {
+  #sidebar { width: 220px; padding: 12px; }
+  #user-list li { padding: 8px 10px; }
+  .call-btn { width: 32px; height: 32px; font-size: 0.85rem; }
+}
+
+/* Mobile / small tablet portrait */
+@media (max-width: 768px) {
   #app-screen { flex-direction: column; }
   #sidebar {
-    width: 100%; flex-direction: row; padding: 12px; border-right: none;
-    border-bottom: 1px solid #333; align-items: center; overflow: hidden;
+    width: 100%; flex-direction: row; padding: 8px 12px; border-right: none;
+    border-bottom: 1px solid #333; align-items: center; overflow: hidden; max-height: 60px;
   }
-  #sidebar-header { margin-bottom: 0; margin-right: 12px; }
-  #user-list { display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; flex: unset; }
-  #user-list li { white-space: nowrap; padding: 8px 14px; margin-bottom: 0; flex-shrink: 0; }
+  #sidebar-header { margin-bottom: 0; margin-right: 8px; flex-shrink: 0; }
+  #sidebar-header h2 { font-size: 0.85rem; }
+  #user-list {
+    display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden; flex: unset;
+    scrollbar-width: none; -ms-overflow-style: none;
+  }
+  #user-list::-webkit-scrollbar { display: none; }
+  #user-list li {
+    white-space: nowrap; padding: 6px 10px; margin-bottom: 0; flex-shrink: 0;
+    background: #0f3460; border-radius: 20px; cursor: default;
+  }
   #user-list li::before { display: none; }
-  #user-list li::after { content: ''; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; margin-left: 8px; flex-shrink: 0; }
+  #user-list li::after { content: ''; width: 6px; height: 6px; background: #4ade80; border-radius: 50%; margin-left: 6px; flex-shrink: 0; }
   #sidebar-footer { display: none; }
-  #main { height: calc(100vh - 60px); }
-  #chat-input-area { padding: 10px 12px; }
-  #msg-input { padding: 14px 16px; font-size: 1.1rem; }
-  #send-btn { padding: 14px 20px; font-size: 1.1rem; }
+  #main { min-height: 0; }
+  #chat-view { min-height: 0; }
+  #chat-input-area { padding: 8px 10px; }
+  #msg-input { padding: 12px 14px; font-size: 1rem; }
+  #send-btn { padding: 12px 16px; font-size: 1rem; }
   .msg { max-width: 85%; }
-  #local-video { width: 100px; }
+  .msg .text { font-size: 0.9rem; }
+  #local-video { width: 80px; }
+  .call-btn { width: 28px; height: 28px; font-size: 0.75rem; }
+  .role-badge { font-size: 0.55rem; }
 }
