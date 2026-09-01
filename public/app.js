@@ -42,12 +42,18 @@ function join() {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${location.host}`);
 
-  ws.onopen = () => {
+  ws.onopen = async () => {
     ws.send(JSON.stringify({ type: 'join', userId: myId, username: myUsername }));
     loginScreen.classList.remove('active');
     appScreen.classList.add('active');
     joinBtn.disabled = false;
     joinBtn.textContent = 'Join';
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localVideo.srcObject = localStream;
+    } catch (e) {
+      console.warn('Camera/mic not available:', e.message);
+    }
   };
 
   ws.onmessage = async (event) => {
@@ -168,8 +174,10 @@ function sendMessage() {
 }
 
 async function startLocalStream() {
+  if (localStream) return localStream;
   localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   localVideo.srcObject = localStream;
+  return localStream;
 }
 
 function createPeerConnection() {
