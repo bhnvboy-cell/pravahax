@@ -7,8 +7,10 @@ Enterprise-grade local network chat and video call platform.
 ## Features
 
 ### Core
-- Real-time text messaging
-- Video and audio calls (WebRTC P2P)
+- Real-time text messaging with history (last 200 messages)
+- 1-on-1 video and audio calls (WebRTC P2P)
+- Group video calls (mesh WebRTC, 3-4 participants)
+- Photo/image sharing in chat
 - Online user presence
 - Works on phone, tablet, computer
 
@@ -31,6 +33,10 @@ npm install
 npm start
 ```
 
+Or use the batch files (Windows):
+- **start.bat** — Start the server
+- **kill.bat** — Stop the server
+
 Open `http://localhost:3000`
 
 Default admin: `admin` / `admin123`
@@ -52,6 +58,7 @@ Default admin: `admin` / `admin123`
 | PUT | `/api/admin/users/:id/status` | Ban/unban (admin) |
 | DELETE | `/api/admin/users/:id` | Delete user (admin) |
 | POST | `/api/admin/kick` | Kick online user (admin) |
+| POST | `/api/upload` | Upload image (jpg/png/gif/webp, max 10MB) |
 
 ## Admin Panel
 
@@ -94,13 +101,15 @@ src/
   models/
     JsonStore.js          - File-based database
     User.js               - User model with bcrypt
+    Message.js            - Message persistence (JSON store)
     AuditLog.js           - Audit trail
   routes/
     auth.js               - Register, login, password
     admin.js              - User management, stats
     health.js             - Health check endpoint
+    upload.js             - Image upload (multer)
   services/
-    websocket.js          - WebSocket with auth, roles, admin controls
+    websocket.js          - WebSocket with auth, rooms, group calls, admin controls
   utils/
     logger.js             - Winston structured logging
 public/
