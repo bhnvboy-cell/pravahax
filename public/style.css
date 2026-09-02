@@ -44,6 +44,12 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; he
 #sidebar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 #sidebar-header h2 { font-size: 1rem; color: #a8a8b3; text-transform: uppercase; letter-spacing: 1px; }
 #online-count { background: #4ade80; color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; }
+#group-call-btn {
+  width: 32px; height: 32px; border: none; border-radius: 50%; cursor: pointer;
+  background: #e94560; color: #fff; font-size: 1rem; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0; transition: all 0.2s;
+}
+#group-call-btn:hover { background: #c73650; transform: scale(1.1); }
 #user-list { list-style: none; flex: 1; overflow-y: auto; }
 #user-list li {
   padding: 10px 12px; margin-bottom: 4px; border-radius: 8px;
@@ -104,6 +110,24 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; he
   border-radius: 8px; cursor: pointer; font-size: 1rem; transition: background 0.2s; flex-shrink: 0;
 }
 #send-btn:hover { background: #c73650; }
+#photo-btn {
+  width: 44px; height: 44px; border: none; border-radius: 8px; cursor: pointer;
+  background: #16213e; color: #eee; font-size: 1.2rem; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0; transition: background 0.2s;
+}
+#photo-btn:hover { background: #0f3460; }
+.msg img.chat-image { max-width: 300px; max-height: 300px; border-radius: 8px; margin-top: 6px; cursor: pointer; }
+.msg img.chat-image:hover { opacity: 0.9; }
+
+#video-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px;
+  width: 100%; max-width: 900px; padding: 10px;
+}
+#video-grid video { width: 100%; border-radius: 8px; background: #111; }
+#video-grid:empty { display: none; }
+#video-grid:not(:empty) ~ #remote-video { display: none; }
+.video-label { position: relative; }
+.video-label::after { content: attr(data-name); position: absolute; bottom: 6px; left: 8px; background: rgba(0,0,0,0.6); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
 
 #call-view { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0a0a1a; }
 #call-info { text-align: center; margin-bottom: 20px; }
@@ -193,6 +217,8 @@ body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; he
   #send-btn { padding: 10px 16px; font-size: 1rem; }
   .msg { max-width: 85%; }
   .msg .text { font-size: 0.9rem; }
+  .msg img.chat-image { max-width: 220px; max-height: 220px; }
+  #photo-btn { width: 38px; height: 38px; font-size: 1rem; }
   #local-video { width: 80px; }
   .call-btn { width: 28px; height: 28px; font-size: 0.75rem; }
   .role-badge { font-size: 0.55rem; }

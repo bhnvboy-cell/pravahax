@@ -8,6 +8,7 @@ const { setupWebSocket, setWss, getOnlineUsers, kickUser } = require('./src/serv
 const { healthCheck } = require('./src/routes/health');
 const authRoutes = require('./src/routes/auth');
 const adminRoutes = require('./src/routes/admin');
+const uploadRoutes = require('./src/routes/upload');
 const auditLog = require('./src/models/AuditLog');
 const userModel = require('./src/models/User');
 const logger = require('./src/utils/logger');
@@ -24,6 +25,8 @@ setupSecurity(app);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api', uploadRoutes);
+app.use('/uploads', express.static(config.dataDir));
 app.get('/api/health', healthCheck(wss));
 
 app.get('/api/online', (req, res) => {

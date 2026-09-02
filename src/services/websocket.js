@@ -11,6 +11,7 @@ function sanitize(text) {
 }
 
 const users = new Map();
+const rooms = new Map();
 
 function setupWebSocket(wss) {
   wss.on('connection', (ws, req) => {
@@ -117,6 +118,71 @@ function setupWebSocket(wss) {
 
           case 'ping':
             ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+            break;
+
+          case 'room-create':
+            if (!userId) return;
+            const roomId = 'room-' + Date.now() + '-' + Math.random().toString(36).substring(2, 8);
+            rooms.set(roomId, { creator: userId, members: new Set([userId]), name: msg.name || (username + "'s call") });
+            ws.send(JSON.stringify({ type: 'room-created', roomId, members: [userId] }));
+            logger.info(`Room created: ${roomId} by ${username}`);
+            break;
+
+          case 'room-invite':
+            if (!userId || !msg.roomId || !msg.userIds) return;
+            const room = rooms.get(msg.roomId);
+            if (!room || room.creator !== userId) return;
+            msg.userIds.forEach(uid => {
+              room.members.add(uid);
+              const target = users.get(uid);
+              if (target && target.ws.readyState === 1) {
+                target.ws.send(JSON.stringify({ type: 'room-invite', roomId: msg.roomId, from: userId, username, roomName: room.name }));
+              }
+            });
+            ws.send(JSON.stringify({ type: 'room-updated', roomId: msg.roomId, members: Array.from(room.members) }));
+            break;
+
+          case 'room-join':
+            if (!userId || !msg.roomId) return;
+            const joinRoom = rooms.get(msg.roomId);
+            if (!joinRoom) return ws.send(JSON.stringify({ type: 'room-error', error: 'Room not found' }));
+            const wasMember = joinRoom.members.has(userId);
+            joinRoom.members.add(userId);
+            joinRoom.members.forEach(uid => {
+              if (uid !== userId) {
+                const member = users.get(uid);
+                if (member && member.ws.readyState === 1) {
+                  member.ws.send(JSON.stringify({ type: 'room-user-joined', roomId: msg.roomId, userId, username }));
+                }
+              }
+            });
+            ws.send(JSON.stringify({ type: 'room-joined', roomId: msg.roomId, members: Array.from(joinRoom.members), roomName: joinRoom.name }));
+            break;
+
+          case 'room-leave':
+          case 'room-end':
+            if (!userId || !msg.roomId) return;
+            const leaveRoom = rooms.get(msg.roomId);
+            if (!leaveRoom) return;
+            const isEnd = msg.type === 'room-end' && leaveRoom.creator === userId;
+            leaveRoom.members.delete(userId);
+            leaveRoom.members.forEach(uid => {
+              const member = users.get(uid);
+              if (member && member.ws.readyState === 1) {
+                member.ws.send(JSON.stringify({ type: isEnd ? 'room-ended' : 'room-user-left', roomId: msg.roomId, userId, username }));
+              }
+            });
+            if (leaveRoom.members.size === 0 || isEnd) {
+              rooms.delete(msg.roomId);
+            }
+            break;
+
+          case 'room-signal':
+            if (!userId || !msg.roomId || !msg.to || !msg.signal) return;
+            const sigTarget = users.get(msg.to);
+            if (sigTarget && sigTarget.ws.readyState === 1) {
+              sigTarget.ws.send(JSON.stringify({ type: 'room-signal', roomId: msg.roomId, from: userId, username, signal: msg.signal }));
+            }
             break;
         }
       } catch (e) {
