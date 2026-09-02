@@ -230,7 +230,7 @@ function connectWebSocket() {
       case 'room-created':
         currentRoom = msg.roomId;
         callPeerName.textContent = 'Group Call';
-        callStatus.textContent = 'Room created. Inviting users...');
+        callStatus.textContent = 'Room created. Inviting users...';
         chatView.classList.add('hidden');
         callView.classList.remove('hidden');
         break;
